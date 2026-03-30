@@ -2,3 +2,4 @@
 /data
 TODO.md
 *.log
+__pycache__
