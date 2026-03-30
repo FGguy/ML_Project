@@ -25,9 +25,6 @@ def load_config(config_path: str) -> dict:
 
     Returns:
         dict: Parsed config dictionary.
-
-    Example:
-        >>> cfg = load_config("configs/base_config.yaml")
     """
     with open(config_path) as f:
         return yaml.safe_load(f)
@@ -38,7 +35,6 @@ def parse_filename(filename: str) -> tuple[str, int]:
     Parse the BPM and sample number from an IDMT-SMT audio filename.
 
     Expected format: ``{genre}_{sample_number}_{bpm}BPM.wav``
-    Example: ``classical_1_80BPM.wav`` → sample_number=1, bpm=80
 
     Args:
         filename (str): Base filename without directory (e.g. "classical_1_80BPM.wav").
@@ -46,10 +42,6 @@ def parse_filename(filename: str) -> tuple[str, int]:
     Returns:
         tuple[str, int]: (sample_number as str, bpm as int).
             Returns ("unknown", 0) if the pattern does not match.
-
-    Example:
-        >>> parse_filename("jazz_3_120BPM.wav")
-        ('3', 120)
     """
     # Pattern: anything_NUMBER_NUMBERBPM.wav
     match = re.search(r"_(\d+)_(\d+)BPM\.wav$", filename, re.IGNORECASE)
@@ -75,10 +67,6 @@ def make_flat_filename(
 
     Returns:
         str: Flat filename, e.g. "acoustic_mic__fast__classical__classical_1_80BPM.wav".
-
-    Example:
-        >>> make_flat_filename("Career SG", "fast", "jazz", "jazz_1_120BPM.wav")
-        'Career SG__fast__jazz__jazz_1_120BPM.wav'
     """
     return f"{guitar_type}__{tempo}__{genre}__{original_name}"
 
@@ -97,11 +85,6 @@ def collect_wav_files(raw_dir: Path) -> list[dict]:
         list[dict]: One dict per file with keys:
             flat_filename, original_path, guitar_type, tempo, genre,
             sample_number, bpm.
-
-    Example:
-        >>> records = collect_wav_files(Path("data/raw"))
-        >>> len(records)
-        507
     """
     records = []
     for wav_path in sorted(raw_dir.rglob("*.wav")):
@@ -143,9 +126,6 @@ def flatten_dataset(config_path: str = "configs/base_config.yaml") -> None:
 
     Returns:
         None
-
-    Example:
-        >>> flatten_dataset("configs/base_config.yaml")
     """
     cfg = load_config(config_path)
     raw_dir = Path(cfg["paths"]["raw_dir"])
