@@ -1,0 +1,32 @@
+pedals:
+  distortion_1:
+    type: distortion
+    drive_db: 20
+  distortion_2:
+    type: distortion
+    drive_db: 45
+  overdrive_1:
+    type: distortion
+    drive_db: 8
+  overdrive_2:
+    type: distortion_clipping
+    drive_db: 14
+    threshold_db: -12
+  fuzz_1:
+    type: distortion_clipping
+    drive_db: 60
+    threshold_db: -6
+  fuzz_2:
+    type: distortion_clipping
+    drive_db: 75
+    threshold_db: -18
+
+labels:
+  distortion_1: 0
+  distortion_2: 1
+  overdrive_1: 2
+  overdrive_2: 3
+  fuzz_1: 4
+  fuzz_2: 5
+
+assignment_seed: 42

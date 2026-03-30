@@ -13,21 +13,8 @@ import shutil
 from pathlib import Path
 
 import pandas as pd
-import yaml
 
-
-def load_config(config_path: str) -> dict:
-    """
-    Load a YAML config file.
-
-    Args:
-        config_path (str): Path to the YAML config file.
-
-    Returns:
-        dict: Parsed config dictionary.
-    """
-    with open(config_path) as f:
-        return yaml.safe_load(f)
+from src.utils import load_config
 
 
 def parse_filename(filename: str) -> tuple[str, int]:

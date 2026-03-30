@@ -15,22 +15,9 @@ from pathlib import Path
 import pandas as pd
 import torch
 import torchaudio
-import yaml
 from torchaudio.transforms import Resample
 
-
-def load_config(config_path: str) -> dict:
-    """
-    Load a YAML config file.
-
-    Args:
-        config_path (str): Path to the YAML config file.
-
-    Returns:
-        dict: Parsed config dictionary.
-    """
-    with open(config_path) as f:
-        return yaml.safe_load(f)
+from src.utils import load_config
 
 
 def to_mono(waveform: torch.Tensor) -> torch.Tensor:
