@@ -1,6 +1,6 @@
-.PHONY: all flatten preprocess distortion split normalize
+.PHONY: all flatten preprocess distortion split normalize augment
 
-all: flatten preprocess distortion split normalize
+all: flatten preprocess distortion split normalize augment
 
 flatten:
 	python -m src.data.flatten
@@ -16,3 +16,6 @@ split:
 
 normalize:
 	python -m src.data.normalize
+
+augment:
+	python -m src.data.augment
