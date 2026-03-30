@@ -7,23 +7,21 @@ paths:
   audio_index: data/processed/audio_index.csv
   splits_dir: data/splits
   mel_stats: data/splits/mel_stats.pt
-
 audio:
   source_sr: 44100
   target_sr: 22050
-
 split:
-  train_ratio: 0.70
+  train_ratio: 0.7
   val_ratio: 0.15
   test_ratio: 0.15
   seed: 42
-
 augmentation:
   seed: 42
   noise_snr_db: 30
-  gain_range: [0.8, 1.2]
-  max_shift_ratio: 0.10
-
+  gain_range:
+  - 0.8
+  - 1.2
+  max_shift_ratio: 0.1
 mel:
   n_fft: 1024
   hop_length: 256
@@ -31,4 +29,4 @@ mel:
   f_min: 80
   f_max: 8000
   power: 2.0
-  fixed_time_frames: null  # computed from train set at precompute time
+  fixed_time_frames: 2269

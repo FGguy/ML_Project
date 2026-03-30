@@ -1,6 +1,6 @@
-.PHONY: all flatten preprocess distortion split normalize augment
+.PHONY: all flatten preprocess distortion split normalize augment mel
 
-all: flatten preprocess distortion split normalize augment
+all: flatten preprocess distortion split normalize augment mel
 
 flatten:
 	python -m src.data.flatten
@@ -19,3 +19,6 @@ normalize:
 
 augment:
 	python -m src.data.augment
+
+mel:
+	python -m src.data.mel_precompute
