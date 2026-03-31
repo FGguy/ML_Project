@@ -1,4 +1,5 @@
-.PHONY: all flatten preprocess distortion split normalize augment mel
+.PHONY: all flatten preprocess distortion split normalize augment mel \
+        train-rnn train-cnn1d train-crdnn train-all
 
 all: flatten preprocess distortion split normalize augment mel
 
@@ -22,3 +23,14 @@ augment:
 
 mel:
 	python -m src.data.mel_precompute
+
+train-rnn:
+	python -m src.train --model rnn
+
+train-cnn1d:
+	python -m src.train --model cnn1d
+
+train-crdnn:
+	python -m src.train --model crdnn
+
+train-all: train-rnn train-cnn1d train-crdnn
