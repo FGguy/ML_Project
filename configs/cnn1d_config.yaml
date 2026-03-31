@@ -1,0 +1,19 @@
+model: cnn1d
+
+# Strided Conv1d layers progressively reduce the 580864-sample waveform.
+# Each entry corresponds to one conv block [out_channels, kernel_size, stride].
+conv_blocks:
+  - [32,  11, 4]
+  - [64,   9, 4]
+  - [128,  7, 4]
+  - [256,  5, 4]
+
+dropout: 0.3
+num_classes: 6
+
+# Training
+batch_size: 32
+lr: 0.001
+epochs: 100
+patience: 15
+num_workers: 0
