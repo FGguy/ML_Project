@@ -2,6 +2,7 @@
 /data
 /checkpoints
 /results
+/notebooks
 TODO.md
 *.log
 __pycache__

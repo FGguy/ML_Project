@@ -44,9 +44,9 @@ SEARCH_SPACES = {
     },
     "crdnn": {
         "lr": [1e-4, 5e-4, 1e-3],
-        "gru_hidden": [64, 128, 256],
+        "gru_hidden": [32, 64, 128],
         "dropout": [0.2, 0.3, 0.5],
-        "batch_size": [16, 32],
+        "batch_size": [8, 16],
     },
 }
 

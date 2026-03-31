@@ -4,16 +4,16 @@ model: crdnn
 # Each entry: [out_channels, kernel_size, pool_size].
 # After 3 blocks the freq dim goes 128 -> 64 -> 32 -> 16.
 cnn_blocks:
-  - [32,  3, 2]
-  - [64,  3, 2]
-  - [128, 3, 2]
+  - [16, 3, 2]
+  - [32, 3, 2]
+  - [64, 3, 2]
 
-gru_hidden: 128
+gru_hidden: 64
 dropout: 0.3
 num_classes: 6
 
 # Training
-batch_size: 32
+batch_size: 16
 lr: 0.001
 epochs: 100
 patience: 15

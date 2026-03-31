@@ -44,8 +44,8 @@ class ConvBlock2d(nn.Module):
             ),
             nn.BatchNorm2d(out_channels),
             nn.ReLU(),
-            # Pool only the frequency axis to keep full time resolution for GRU
-            nn.MaxPool2d(kernel_size=(pool_size, 1)),
+            # Pool both freq and time axes — keeping 2269 time steps OOMs the GRU
+            nn.MaxPool2d(kernel_size=(pool_size, pool_size)),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
