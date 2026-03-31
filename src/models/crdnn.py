@@ -31,7 +31,9 @@ class ConvBlock2d(nn.Module):
         pool_size (int): Frequency-axis pool factor.
     """
 
-    def __init__(self, in_channels: int, out_channels: int, kernel_size: int, pool_size: int):
+    def __init__(
+        self, in_channels: int, out_channels: int, kernel_size: int, pool_size: int
+    ):
         super().__init__()
         self.block = nn.Sequential(
             nn.Conv2d(
@@ -114,8 +116,8 @@ class CRDNN(nn.Module):
         if self.gru is None:
             self._build_rnn_head(channels * freq)
 
-        _, h_n = self.gru(x)    # h_n: (1, batch, gru_hidden)
-        h_n = h_n.squeeze(0)    # (batch, gru_hidden)
+        _, h_n = self.gru(x)  # h_n: (1, batch, gru_hidden)
+        h_n = h_n.squeeze(0)  # (batch, gru_hidden)
         return self.classifier(self.dropout(h_n))
 
 
