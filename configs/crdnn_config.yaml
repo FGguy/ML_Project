@@ -1,8 +1,8 @@
 model: crdnn
 
-# CNN blocks applied to the mel spectrogram (1, 128, 2269).
+# CNN blocks applied to the mel spectrogram (1, 64, 1135).
 # Each entry: [out_channels, kernel_size, pool_size].
-# After 3 blocks the freq dim goes 128 -> 64 -> 32 -> 16.
+# After 3 blocks: freq 64 -> 32 -> 16 -> 8, time 1135 -> 567 -> 283 -> 141.
 cnn_blocks:
   - [16, 3, 2]
   - [32, 3, 2]

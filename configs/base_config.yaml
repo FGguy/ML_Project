@@ -24,9 +24,9 @@ augmentation:
   max_shift_ratio: 0.1
 mel:
   n_fft: 1024
-  hop_length: 256
-  n_mels: 128
+  hop_length: 512
+  n_mels: 64
   f_min: 80
   f_max: 8000
   power: 2.0
-  fixed_time_frames: 2269
+  fixed_time_frames: 1135
