@@ -1,6 +1,7 @@
 /.vscode
 /data
 /checkpoints
+/results
 TODO.md
 *.log
 __pycache__
