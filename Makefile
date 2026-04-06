@@ -1,7 +1,7 @@
 .PHONY: all flatten preprocess distortion split normalize augment mel \
-        tune-rnn tune-cnn1d tune-crdnn tune-all \
-        train-rnn train-cnn1d train-crdnn train-all \
-        eval-rnn eval-cnn1d eval-crdnn eval-all
+        tune-rnn tune-crdnn-audio tune-crdnn tune-all \
+        train-rnn train-crdnn-audio train-crdnn train-all \
+        eval-rnn eval-crdnn-audio eval-crdnn eval-all
 
 all: flatten preprocess distortion split normalize augment mel
 
@@ -29,32 +29,32 @@ mel:
 tune-rnn:
 	python -m src.tune --model rnn
 
-tune-cnn1d:
-	python -m src.tune --model cnn1d
+tune-crdnn-audio:
+	python -m src.tune --model crdnn_audio
 
 tune-crdnn:
 	python -m src.tune --model crdnn
 
-tune-all: tune-rnn tune-cnn1d tune-crdnn
+tune-all: tune-rnn tune-crdnn-audio tune-crdnn
 
 train-rnn:
 	python -m src.train --model rnn
 
-train-cnn1d:
-	python -m src.train --model cnn1d
+train-crdnn-audio:
+	python -m src.train --model crdnn_audio
 
 train-crdnn:
 	python -m src.train --model crdnn
 
-train-all: train-rnn train-cnn1d train-crdnn
+train-all: train-rnn train-crdnn-audio train-crdnn
 
 eval-rnn:
 	python -m src.evaluate --model rnn
 
-eval-cnn1d:
-	python -m src.evaluate --model cnn1d
+eval-crdnn-audio:
+	python -m src.evaluate --model crdnn_audio
 
 eval-crdnn:
 	python -m src.evaluate --model crdnn
 
-eval-all: eval-rnn eval-cnn1d eval-crdnn
+eval-all: eval-rnn eval-crdnn-audio eval-crdnn

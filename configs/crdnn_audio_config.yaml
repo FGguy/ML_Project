@@ -1,4 +1,4 @@
-model: cnn1d
+model: crdnn_audio
 
 # Strided Conv1d layers progressively compress the raw waveform.
 # Each entry: [out_channels, kernel_size, stride].
@@ -28,7 +28,7 @@ num_classes: 6
 use_gap: false
 
 # Training
-batch_size: 32
+batch_size: 16
 lr: 0.001
 # L2 weight decay on Adam — prevents over-reliance on absolute amplitude cues.
 # Ref: Pons et al. (1703.06697)

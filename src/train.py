@@ -3,7 +3,7 @@ Shared training loop for all three models.
 
 Usage:
     python -m src.train --model rnn
-    python -m src.train --model cnn1d
+    python -m src.train --model crdnn_audio
     python -m src.train --model crdnn
 
 Each model reads its own YAML config for hyperparameters. The best checkpoint
@@ -11,8 +11,8 @@ Each model reads its own YAML config for hyperparameters. The best checkpoint
 early if val loss does not improve for `patience` epochs.
 
 Dataset routing (enforced — do not mix):
-    rnn, cnn1d  →  RawAudioDataset
-    crdnn       →  SpectrogramDataset
+    rnn, crdnn_audio  →  RawAudioDataset
+    crdnn             →  SpectrogramDataset
 """
 
 import argparse
@@ -27,7 +27,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 
 from src.data.dataset import RawAudioDataset, SpectrogramDataset, collate_variable_length
-from src.models.crdnn_raw_audio import build_cnn1d
+from src.models.crdnn_raw_audio import build_audio_crdnn
 from src.models.crdnn_spectrogram import build_crdnn
 from src.models.rnn_baseline import build_rnn
 from src.utils import load_config
@@ -52,7 +52,7 @@ def get_model(model_name: str, cfg: dict) -> nn.Module:
     Instantiate the requested model from its config dict.
 
     Args:
-        model_name (str): One of 'rnn', 'cnn1d', 'crdnn'.
+        model_name (str): One of 'rnn', 'crdnn_audio', 'crdnn'.
         cfg (dict): Model config dictionary.
 
     Returns:
@@ -63,8 +63,8 @@ def get_model(model_name: str, cfg: dict) -> nn.Module:
     """
     if model_name == "rnn":
         return build_rnn(cfg)
-    if model_name == "cnn1d":
-        return build_cnn1d(cfg)
+    if model_name == "crdnn_audio":
+        return build_audio_crdnn(cfg)
     if model_name == "crdnn":
         return build_crdnn(cfg)
     raise ValueError(f"Unknown model: {model_name!r}")
@@ -79,7 +79,7 @@ def get_datasets(model_name: str, base_cfg: dict, model_cfg: dict = None):
     params are present in model_cfg.
 
     Args:
-        model_name (str): One of 'rnn', 'cnn1d', 'crdnn'.
+        model_name (str): One of 'rnn', 'crdnn_audio', 'crdnn'.
         base_cfg (dict): Base config containing split paths.
         model_cfg (dict | None): Model config, used for SpecAugment params.
 
@@ -218,13 +218,13 @@ def train_model(model_name: str) -> None:
     checkpoints/{model_name}_best.pt.
 
     Args:
-        model_name (str): One of 'rnn', 'cnn1d', 'crdnn'.
+        model_name (str): One of 'rnn', 'crdnn_audio', 'crdnn'.
     """
     base_cfg = load_config("configs/base_config.yaml")
     model_cfg = load_config(
-        f"configs/{model_name}_config.yaml"
-        if model_name != "rnn"
-        else "configs/rnn_baseline_config.yaml"
+        "configs/rnn_baseline_config.yaml"
+        if model_name == "rnn"
+        else f"configs/{model_name}_config.yaml"
     )
 
     seed = 42
@@ -234,7 +234,7 @@ def train_model(model_name: str) -> None:
     print(f"Training {model_name} on {device}")
 
     train_ds, val_ds = get_datasets(model_name, base_cfg, model_cfg)
-    collate_fn = collate_variable_length if model_name != "crdnn" else None
+    collate_fn = collate_variable_length if model_name in ("rnn", "crdnn_audio") else None
     train_loader = DataLoader(
         train_ds,
         batch_size=model_cfg["batch_size"],
@@ -328,7 +328,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train a pedal classification model.")
     parser.add_argument(
         "--model",
-        choices=["rnn", "cnn1d", "crdnn"],
+        choices=["rnn", "crdnn_audio", "crdnn"],
         required=True,
         help="Model to train.",
     )

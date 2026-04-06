@@ -3,7 +3,7 @@ Random-search hyperparameter tuning for all three models.
 
 Usage:
     python -m src.tune --model rnn     [--trials 10] [--tune-epochs 20]
-    python -m src.tune --model cnn1d   [--trials 10] [--tune-epochs 20]
+    python -m src.tune --model crdnn_audio   [--trials 10] [--tune-epochs 20]
     python -m src.tune --model crdnn   [--trials 10] [--tune-epochs 20]
 
 Each trial samples a hyperparameter combination at random, trains for up to
@@ -37,21 +37,21 @@ SEARCH_SPACES = {
         "lr": [1e-4, 5e-4, 1e-3, 5e-3],
         "hidden_size": [64, 128, 256],
         "weight_decay": [0, 1e-5, 1e-4],
-        "batch_size": [16, 32, 64],
+        "batch_size": [8, 16, 32],
     },
-    "cnn1d": {
+    "crdnn_audio": {
         "lr": [1e-4, 5e-4, 1e-3],
         "gru_hidden": [64, 128, 256],
         "dropout": [0.2, 0.3, 0.5],
         "weight_decay": [0, 1e-5, 1e-4],
-        "batch_size": [16, 32, 64],
+        "batch_size": [8, 16],
     },
     "crdnn": {
         "lr": [1e-4, 5e-4, 1e-3],
         "gru_hidden": [32, 64, 128],
         "dropout": [0.2, 0.3, 0.5],
         "weight_decay": [0, 1e-5, 1e-4],
-        "batch_size": [8, 16],
+        "batch_size": [4, 8],
     },
 }
 
@@ -61,7 +61,7 @@ def config_path_for(model_name: str) -> str:
     Return the YAML config file path for a given model name.
 
     Args:
-        model_name (str): One of 'rnn', 'cnn1d', 'crdnn'.
+        model_name (str): One of 'rnn', 'crdnn_audio', 'crdnn'.
 
     Returns:
         str: Path to the model's YAML config file.
@@ -69,6 +69,7 @@ def config_path_for(model_name: str) -> str:
     if model_name == "rnn":
         return "configs/rnn_baseline_config.yaml"
     return f"configs/{model_name}_config.yaml"
+
 
 
 def sample_params(search_space: dict, rng: random.Random) -> dict:
@@ -98,7 +99,7 @@ def run_trial(
     Train a model with one hyperparameter configuration and return best val loss.
 
     Args:
-        model_name (str): One of 'rnn', 'cnn1d', 'crdnn'.
+        model_name (str): One of 'rnn', 'crdnn_audio', 'crdnn'.
         base_cfg (dict): Base pipeline config (paths etc.).
         trial_cfg (dict): Full model config with this trial's sampled params applied.
         device (torch.device): Device to run on.
@@ -112,7 +113,7 @@ def run_trial(
     set_seeds(trial_seed)
 
     train_ds, val_ds = get_datasets(model_name, base_cfg, trial_cfg)
-    collate_fn = collate_variable_length if model_name != "crdnn" else None
+    collate_fn = collate_variable_length if model_name in ("rnn", "crdnn_audio") else None
     train_loader = DataLoader(
         train_ds,
         batch_size=trial_cfg["batch_size"],
@@ -178,7 +179,7 @@ def tune(model_name: str, n_trials: int, tune_epochs: int) -> None:
     Run random-search hyperparameter tuning and write best params to config.
 
     Args:
-        model_name (str): One of 'rnn', 'cnn1d', 'crdnn'.
+        model_name (str): One of 'rnn', 'crdnn_audio', 'crdnn'.
         n_trials (int): Number of random configurations to evaluate.
         tune_epochs (int): Maximum epochs to train per trial.
     """
@@ -232,7 +233,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Random-search hyperparameter tuning (val set only)."
     )
-    parser.add_argument("--model", choices=["rnn", "cnn1d", "crdnn"], required=True)
+    parser.add_argument("--model", choices=["rnn", "crdnn_audio", "crdnn"], required=True)
     parser.add_argument("--trials", type=int, default=10, help="Number of trials.")
     parser.add_argument(
         "--tune-epochs",

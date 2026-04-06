@@ -2,7 +2,7 @@
 Data augmentation for the training split only.
 
 For each clip in train.csv two augmentation techniques are randomly chosen
-from the pool {noise, gain, shift, pitch, stretch} and applied in sequence.
+from the pool {noise, gain, shift, stretch} and applied in sequence.
 Applying combinations rather than a single technique yields higher accuracy
 than any single method alone.
 
@@ -149,8 +149,8 @@ def augment_waveform(
     """
     Apply a random combination of two augmentation techniques to a waveform.
 
-    Two techniques are sampled without replacement from the full pool
-    {noise, gain, shift, pitch, stretch}. Combining techniques yields better
+    Two techniques are sampled without replacement from the pool
+    {noise, gain, shift, stretch}. Combining techniques yields better
     generalisation than any single technique in isolation.
 
     Ref: Tsalera et al. (jsan-14-00091)

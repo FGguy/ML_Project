@@ -24,7 +24,7 @@ inter_dropout_rates: [0.1, 0.2, 0.3]
 num_classes: 6
 
 # Training
-batch_size: 16
+batch_size: 8
 lr: 0.001
 # L2 weight decay — achieves loudness invariance by penalising large weights.
 # Ref: Pons et al. (1703.06697)

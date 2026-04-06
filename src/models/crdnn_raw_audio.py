@@ -159,7 +159,7 @@ class AudioCRDNN(nn.Module):
         return self.head(h_n)
 
 
-def build_cnn1d(config: dict) -> AudioCRDNN:
+def build_audio_crdnn(config: dict) -> AudioCRDNN:
     """
     Instantiate an AudioCRDNN from a config dictionary.
 

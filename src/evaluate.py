@@ -3,7 +3,7 @@ Final evaluation of a trained model on the held-out test set.
 
 Usage:
     python -m src.evaluate --model rnn
-    python -m src.evaluate --model cnn1d
+    python -m src.evaluate --model crdnn_audio
     python -m src.evaluate --model crdnn
 
 Loads the best checkpoint from checkpoints/{model}_best.pt and reports:
@@ -31,15 +31,15 @@ import torch
 from sklearn.metrics import classification_report, confusion_matrix
 from torch.utils.data import DataLoader
 
-from src.data.dataset import RawAudioDataset, SpectrogramDataset
-from src.models.crdnn_raw_audio import build_cnn1d
+from src.data.dataset import RawAudioDataset, SpectrogramDataset, collate_variable_length
+from src.models.crdnn_raw_audio import build_audio_crdnn
 from src.models.crdnn_spectrogram import build_crdnn
 from src.models.rnn_baseline import build_rnn
 from src.utils import load_config
 
 DOMAIN_LABEL = {
     "rnn": "time domain (raw audio)",
-    "cnn1d": "time domain (raw audio)",
+    "crdnn_audio": "time domain (raw audio)",
     "crdnn": "frequency domain (mel spectrogram)",
 }
 
@@ -49,7 +49,7 @@ def get_model(model_name: str, cfg: dict) -> torch.nn.Module:
     Instantiate the requested model from its config dict.
 
     Args:
-        model_name (str): One of 'rnn', 'cnn1d', 'crdnn'.
+        model_name (str): One of 'rnn', 'crdnn_audio', 'crdnn'.
         cfg (dict): Model config dictionary.
 
     Returns:
@@ -60,8 +60,8 @@ def get_model(model_name: str, cfg: dict) -> torch.nn.Module:
     """
     if model_name == "rnn":
         return build_rnn(cfg)
-    if model_name == "cnn1d":
-        return build_cnn1d(cfg)
+    if model_name == "crdnn_audio":
+        return build_audio_crdnn(cfg)
     if model_name == "crdnn":
         return build_crdnn(cfg)
     raise ValueError(f"Unknown model: {model_name!r}")
@@ -72,7 +72,7 @@ def get_test_dataset(model_name: str, base_cfg: dict):
     Return the test Dataset for the given model type.
 
     Args:
-        model_name (str): One of 'rnn', 'cnn1d', 'crdnn'.
+        model_name (str): One of 'rnn', 'crdnn_audio', 'crdnn'.
         base_cfg (dict): Base config containing split paths.
 
     Returns:
@@ -84,9 +84,14 @@ def get_test_dataset(model_name: str, base_cfg: dict):
     return RawAudioDataset(test_csv)
 
 
+
 def run_inference(model, loader, device) -> tuple[np.ndarray, np.ndarray]:
     """
     Run the model over the test loader and collect predictions and labels.
+
+    Handles both 2-tuple batches (spectrogram) and 3-tuple batches
+    (raw audio with lengths from collate_variable_length). Lengths are
+    forwarded to models that support packed sequences.
 
     Args:
         model (torch.nn.Module): Trained model in eval mode.
@@ -99,10 +104,15 @@ def run_inference(model, loader, device) -> tuple[np.ndarray, np.ndarray]:
     all_preds, all_labels = [], []
     model.eval()
     with torch.no_grad():
-        for x, y in loader:
+        for batch in loader:
+            if len(batch) == 3:
+                x, y, lengths = batch
+            else:
+                x, y = batch
+                lengths = None
             x = x.to(device)
-            preds = model(x).argmax(dim=1).cpu().numpy()
-            all_preds.append(preds)
+            logits = model(x, lengths=lengths) if lengths is not None else model(x)
+            all_preds.append(logits.argmax(dim=1).cpu().numpy())
             all_labels.append(y.numpy())
     return np.concatenate(all_preds), np.concatenate(all_labels)
 
@@ -150,7 +160,7 @@ def evaluate(model_name: str) -> None:
     Load the best checkpoint and run full evaluation on the test set.
 
     Args:
-        model_name (str): One of 'rnn', 'cnn1d', 'crdnn'.
+        model_name (str): One of 'rnn', 'crdnn_audio', 'crdnn'.
     """
     base_cfg = load_config("configs/base_config.yaml")
     cfg_file = (
@@ -158,6 +168,7 @@ def evaluate(model_name: str) -> None:
         if model_name == "rnn"
         else f"configs/{model_name}_config.yaml"
     )
+
     model_cfg = load_config(cfg_file)
 
     checkpoint_path = Path(f"checkpoints/{model_name}_best.pt")
@@ -176,18 +187,22 @@ def evaluate(model_name: str) -> None:
 
     # Warm up lazy modules (CRDNN builds GRU on first forward pass)
     test_ds = get_test_dataset(model_name, base_cfg)
+    collate_fn = collate_variable_length if model_name in ("rnn", "crdnn_audio") else None
     test_loader = DataLoader(
         test_ds,
         batch_size=model_cfg["batch_size"],
         shuffle=False,
         num_workers=model_cfg["num_workers"],
+        collate_fn=collate_fn,
     )
 
     # Run one dummy batch so lazy submodules are initialised before loading state
     model.eval()
     with torch.no_grad():
-        x, _ = next(iter(test_loader))
-        model(x.to(device))
+        batch = next(iter(test_loader))
+        x = batch[0].to(device)
+        lengths = batch[2] if len(batch) == 3 else None
+        model(x, lengths=lengths) if lengths is not None else model(x)
 
     model.load_state_dict(checkpoint["model_state"])
 
@@ -236,7 +251,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--model",
-        choices=["rnn", "cnn1d", "crdnn"],
+        choices=["rnn", "crdnn_audio", "crdnn"],
         required=True,
         help="Model to evaluate.",
     )
