@@ -165,7 +165,11 @@ def augment_waveform(
     Returns:
         torch.Tensor: Augmented waveform.
     """
-    pool = ["noise", "gain", "shift", "pitch", "stretch"]
+    # pitch_shift is excluded here — it uses a full STFT phase vocoder and is
+    # orders of magnitude slower than the other ops. The CRDNN gains pitch
+    # invariance from the freq-axis max-pool; raw audio models benefit from
+    # natural pitch variety in the dataset.
+    pool = ["noise", "gain", "shift", "stretch"]
     techniques = rng.sample(pool, k=2)
 
     out = waveform
