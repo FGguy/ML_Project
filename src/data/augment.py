@@ -1,13 +1,13 @@
 """
 Data augmentation for the training split only.
 
-For each clip in train.csv two augmentation techniques are randomly chosen
-from the pool {noise, gain, shift, stretch} and applied in sequence.
+For each clip selected for augmentation, two techniques are randomly chosen
+from the pool {noise, gain, shift} and applied in sequence.
 Applying combinations rather than a single technique yields higher accuracy
 than any single method alone.
 
 Ref: Tsalera et al. (jsan-14-00091) — combinations outperform single methods;
-     optimal dataset expansion is 50–100% (current script keeps 1:1 ratio).
+     optimal dataset expansion is 50–100% (controlled via aug_ratio in config).
 
 Augmented files are saved alongside the originals in data/processed/audio/
 with an ``_aug`` suffix. train.csv is updated in-place to include the new
@@ -23,7 +23,6 @@ from pathlib import Path
 import pandas as pd
 import torch
 import torchaudio
-import torch.nn.functional as F
 
 from src.utils import load_config
 
@@ -89,60 +88,6 @@ def time_shift(
     return torch.roll(waveform, shift, dims=-1)
 
 
-def pitch_shift(
-    waveform: torch.Tensor, n_steps: int, sample_rate: int
-) -> torch.Tensor:
-    """
-    Shift the pitch of a waveform by a fixed number of semitones.
-
-    Pedal distortion character (clipping threshold, harmonic structure) is
-    largely pitch-invariant, so a pitch-shifted clip belongs to the same
-    class and adds genuine timbral diversity to training.
-
-    Args:
-        waveform (torch.Tensor): Input audio of shape (channels, samples).
-        n_steps (int): Number of semitones to shift (positive = higher pitch).
-        sample_rate (int): Sample rate of the audio.
-
-    Returns:
-        torch.Tensor: Pitch-shifted waveform, same shape as input.
-    """
-    # Ref: Ferreira-Paiva et al. (paper_5085), Tsalera et al. (jsan-14-00091)
-    return torchaudio.functional.pitch_shift(waveform, sample_rate, n_steps)
-
-
-def time_stretch(
-    waveform: torch.Tensor, rate: float, sample_rate: int
-) -> torch.Tensor:
-    """
-    Stretch or compress a waveform's duration via speed perturbation.
-
-    Resamples from ``int(sample_rate * rate)`` to ``sample_rate``, which
-    changes both tempo and pitch by the same factor. For small rates (0.85–1.15)
-    the pitch change is minor and the added timing diversity outweighs it. The
-    output is trimmed or zero-padded to preserve the original length.
-
-    Args:
-        waveform (torch.Tensor): Input audio of shape (channels, samples).
-        rate (float): Speed factor. >1 compresses (shorter), <1 stretches
-            (longer).
-        sample_rate (int): Sample rate of the audio.
-
-    Returns:
-        torch.Tensor: Speed-perturbed waveform, same shape as input.
-    """
-    # Ref: Ferreira-Paiva et al. (paper_5085), Tsalera et al. (jsan-14-00091)
-    orig_len = waveform.shape[-1]
-    new_sr = max(1, int(sample_rate * rate))
-    stretched = torchaudio.functional.resample(waveform, new_sr, sample_rate)
-    if stretched.shape[-1] > orig_len:
-        return stretched[..., :orig_len]
-    if stretched.shape[-1] < orig_len:
-        pad_len = orig_len - stretched.shape[-1]
-        return F.pad(stretched, (0, pad_len))
-    return stretched
-
-
 def augment_waveform(
     waveform: torch.Tensor, cfg: dict, rng: random.Random, sample_rate: int
 ) -> torch.Tensor:
@@ -150,26 +95,24 @@ def augment_waveform(
     Apply a random combination of two augmentation techniques to a waveform.
 
     Two techniques are sampled without replacement from the pool
-    {noise, gain, shift, stretch}. Combining techniques yields better
-    generalisation than any single technique in isolation.
+    {noise, gain, shift}. Combining techniques yields better generalisation
+    than any single technique in isolation.
 
     Ref: Tsalera et al. (jsan-14-00091)
 
     Args:
         waveform (torch.Tensor): Input audio of shape (channels, samples).
         cfg (dict): Augmentation config with keys noise_snr_db, gain_range,
-            max_shift_ratio, pitch_shift_steps, time_stretch_rates.
+            max_shift_ratio.
         rng (random.Random): Seeded random number generator.
         sample_rate (int): Sample rate of the audio.
 
     Returns:
         torch.Tensor: Augmented waveform.
     """
-    # pitch_shift is excluded here — it uses a full STFT phase vocoder and is
-    # orders of magnitude slower than the other ops. The CRDNN gains pitch
-    # invariance from the freq-axis max-pool; raw audio models benefit from
-    # natural pitch variety in the dataset.
-    pool = ["noise", "gain", "shift", "stretch"]
+    # stretch (speed perturbation via resample) is excluded — it runs a full
+    # polyphase filter per clip and is the main augmentation bottleneck.
+    pool = ["noise", "gain", "shift"]
     techniques = rng.sample(pool, k=2)
 
     out = waveform
@@ -180,18 +123,16 @@ def augment_waveform(
             out = random_gain(out, cfg["gain_range"], rng)
         elif technique == "shift":
             out = time_shift(out, cfg["max_shift_ratio"], rng)
-        elif technique == "pitch":
-            n_steps = rng.choice(cfg["pitch_shift_steps"])
-            out = pitch_shift(out, n_steps, sample_rate)
-        elif technique == "stretch":
-            rate = rng.choice(cfg["time_stretch_rates"])
-            out = time_stretch(out, rate, sample_rate)
     return out
 
 
 def augment_dataset(config_path: str = "configs/base_config.yaml") -> None:
     """
-    Generate one augmented copy per training clip and update train.csv.
+    Generate augmented copies of a fraction of training clips and update train.csv.
+
+    The fraction is controlled by ``aug_ratio`` in the augmentation config
+    (e.g. 0.5 augments half the training clips, adding 50% more samples).
+    Clips are sampled without replacement using the configured seed.
 
     Skips clips whose augmented file already exists so the script is safely
     re-runnable. New rows are appended to train.csv with the same label and
@@ -217,11 +158,16 @@ def augment_dataset(config_path: str = "configs/base_config.yaml") -> None:
 
     originals = train_df[~train_df["filepath"].str.endswith("_aug.wav")]
 
-    new_rows = []
-    total = len(originals)
-    print(f"Augmenting {total} training clips...")
+    # Sample a stratified subset to augment based on aug_ratio
+    aug_ratio = aug_cfg.get("aug_ratio", 1.0)
+    n_to_aug = max(1, int(len(originals) * aug_ratio))
+    to_augment = originals.sample(n=n_to_aug, random_state=seed)
 
-    for i, row in originals.iterrows():
+    new_rows = []
+    total = len(to_augment)
+    print(f"Augmenting {total}/{len(originals)} training clips (aug_ratio={aug_ratio})...")
+
+    for idx, (_, row) in enumerate(to_augment.iterrows()):
         src_path = Path(row["filepath"])
         aug_path = src_path.with_stem(src_path.stem + "_aug")
 
@@ -242,8 +188,8 @@ def augment_dataset(config_path: str = "configs/base_config.yaml") -> None:
             }
         )
 
-        if (i + 1) % 50 == 0:
-            print(f"  {i + 1}/{total} done")
+        if (idx + 1) % 50 == 0:
+            print(f"  {idx + 1}/{total} done")
 
     augmented_df = pd.concat([train_df, pd.DataFrame(new_rows)], ignore_index=True)
     augmented_df.to_csv(train_csv, index=False)
