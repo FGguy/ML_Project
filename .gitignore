@@ -3,6 +3,7 @@
 /checkpoints
 /results
 /notebooks
+/research
 TODO.md
 *.log
 __pycache__

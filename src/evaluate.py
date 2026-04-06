@@ -32,8 +32,8 @@ from sklearn.metrics import classification_report, confusion_matrix
 from torch.utils.data import DataLoader
 
 from src.data.dataset import RawAudioDataset, SpectrogramDataset
-from src.models.cnn1d import build_cnn1d
-from src.models.crdnn import build_crdnn
+from src.models.crdnn_raw_audio import build_cnn1d
+from src.models.crdnn_spectrogram import build_crdnn
 from src.models.rnn_baseline import build_rnn
 from src.utils import load_config
 

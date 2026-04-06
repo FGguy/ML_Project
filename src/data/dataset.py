@@ -15,7 +15,9 @@ from pathlib import Path
 import pandas as pd
 import torch
 import torchaudio
+from torch.nn.utils.rnn import pad_sequence
 
+from src.data.transforms import SpecAugment
 from src.utils import load_config
 
 
@@ -23,8 +25,8 @@ class RawAudioDataset(torch.utils.data.Dataset):
     """
     Dataset that serves raw waveform tensors for the 1D CNN and RNN baseline.
 
-    Loads .wav files on the fly and pads or crops them to a fixed number of
-    samples so that all tensors in a batch share the same shape.
+    Clips are returned at their original length — variable-length batching is
+    handled by the ``collate_variable_length`` collate function.
 
     Args:
         split_csv (str): Path to a split CSV (train.csv / val.csv / test.csv).
@@ -34,10 +36,6 @@ class RawAudioDataset(torch.utils.data.Dataset):
     def __init__(self, split_csv: str, config_path: str = "configs/base_config.yaml"):
         cfg = load_config(config_path)
         self.target_sr = cfg["audio"]["target_sr"]
-        # Fixed length in samples: use fixed_time_frames * hop_length as a
-        # consistent proxy so waveform and spectrogram lengths are aligned.
-        mel_cfg = cfg["mel"]
-        self.fixed_samples = mel_cfg["fixed_time_frames"] * mel_cfg["hop_length"]
 
         df = pd.read_csv(split_csv)
         self.filepaths = df["filepath"].tolist()
@@ -50,24 +48,36 @@ class RawAudioDataset(torch.utils.data.Dataset):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             waveform, _ = torchaudio.load(self.filepaths[idx])
-
-        waveform = self._pad_or_crop(waveform)
         return waveform, self.labels[idx]
 
-    def _pad_or_crop(self, waveform: torch.Tensor) -> torch.Tensor:
-        """
-        Crop or zero-pad a waveform to self.fixed_samples along the time axis.
 
-        Args:
-            waveform (torch.Tensor): Audio of shape (1, samples).
+def collate_variable_length(
+    batch: list,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """
+    Collate waveforms of variable length into a padded batch.
 
-        Returns:
-            torch.Tensor: Audio of shape (1, fixed_samples).
-        """
-        n = waveform.shape[-1]
-        if n >= self.fixed_samples:
-            return waveform[..., : self.fixed_samples]
-        return torch.nn.functional.pad(waveform, (0, self.fixed_samples - n))
+    Waveforms are zero-padded to the longest sequence in the batch. The
+    original lengths are returned so models can use packed sequences and
+    avoid attending to padding.
+
+    Args:
+        batch (list): List of (waveform, label) tuples where each waveform
+            has shape (1, L) with potentially different L.
+
+    Returns:
+        tuple: (padded_waveforms, labels, lengths)
+            - padded_waveforms: (batch, 1, max_L)
+            - labels: (batch,)
+            - lengths: (batch,) original sample counts, dtype=torch.long
+    """
+    waveforms, labels = zip(*batch)
+    lengths = torch.tensor([w.shape[-1] for w in waveforms], dtype=torch.long)
+    # pad_sequence expects (L,) tensors; squeeze channel, pad, add it back
+    padded = pad_sequence(
+        [w.squeeze(0) for w in waveforms], batch_first=True
+    ).unsqueeze(1)  # (batch, 1, max_L)
+    return padded, torch.tensor(labels), lengths
 
 
 class SpectrogramDataset(torch.utils.data.Dataset):
@@ -78,12 +88,28 @@ class SpectrogramDataset(torch.utils.data.Dataset):
     mel_precompute.py. Each tensor has shape (1, n_mels, fixed_time_frames)
     and is already normalized with train-set statistics.
 
+    When ``train=True`` and spec_augment_cfg is provided, SpecAugment is
+    applied on-the-fly — frequency and time masking to improve generalisation.
+    Val and test splits must use ``train=False`` so augmentation is never
+    applied at evaluation time.
+
     Args:
         split_csv (str): Path to a split CSV (train.csv / val.csv / test.csv).
         config_path (str): Path to the base YAML config file.
+        train (bool): If True, apply SpecAugment (training split only).
+        spec_augment_cfg (dict | None): SpecAugment hyper-parameters. Expected
+            keys: freq_mask_param, time_mask_param, num_freq_masks,
+            num_time_masks. If None, augmentation is skipped even when
+            train=True.
     """
 
-    def __init__(self, split_csv: str, config_path: str = "configs/base_config.yaml"):
+    def __init__(
+        self,
+        split_csv: str,
+        config_path: str = "configs/base_config.yaml",
+        train: bool = False,
+        spec_augment_cfg: dict = None,
+    ):
         cfg = load_config(config_path)
         self.spec_dir = Path(cfg["paths"]["processed_spectrograms_dir"])
 
@@ -91,9 +117,20 @@ class SpectrogramDataset(torch.utils.data.Dataset):
         self.stems = [Path(fp).stem for fp in df["filepath"].tolist()]
         self.labels = df["label"].tolist()
 
+        self.augment = None
+        if train and spec_augment_cfg is not None:
+            self.augment = SpecAugment(
+                freq_mask_param=spec_augment_cfg["freq_mask_param"],
+                time_mask_param=spec_augment_cfg["time_mask_param"],
+                num_freq_masks=spec_augment_cfg.get("num_freq_masks", 1),
+                num_time_masks=spec_augment_cfg.get("num_time_masks", 2),
+            )
+
     def __len__(self):
         return len(self.stems)
 
     def __getitem__(self, idx):
         spec = torch.load(self.spec_dir / f"{self.stems[idx]}.pt", weights_only=True)
+        if self.augment is not None:
+            spec = self.augment(spec)
         return spec, self.labels[idx]

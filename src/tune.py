@@ -24,6 +24,7 @@ import torch.nn as nn
 import yaml
 from torch.utils.data import DataLoader
 
+from src.data.dataset import collate_variable_length
 from src.train import get_datasets, get_model, run_epoch, set_seeds
 from src.utils import load_config
 
@@ -35,17 +36,21 @@ SEARCH_SPACES = {
     "rnn": {
         "lr": [1e-4, 5e-4, 1e-3, 5e-3],
         "hidden_size": [64, 128, 256],
+        "weight_decay": [0, 1e-5, 1e-4],
         "batch_size": [16, 32, 64],
     },
     "cnn1d": {
         "lr": [1e-4, 5e-4, 1e-3],
+        "gru_hidden": [64, 128, 256],
         "dropout": [0.2, 0.3, 0.5],
+        "weight_decay": [0, 1e-5, 1e-4],
         "batch_size": [16, 32, 64],
     },
     "crdnn": {
         "lr": [1e-4, 5e-4, 1e-3],
         "gru_hidden": [32, 64, 128],
         "dropout": [0.2, 0.3, 0.5],
+        "weight_decay": [0, 1e-5, 1e-4],
         "batch_size": [8, 16],
     },
 }
@@ -106,23 +111,30 @@ def run_trial(
     """
     set_seeds(trial_seed)
 
-    train_ds, val_ds = get_datasets(model_name, base_cfg)
+    train_ds, val_ds = get_datasets(model_name, base_cfg, trial_cfg)
+    collate_fn = collate_variable_length if model_name != "crdnn" else None
     train_loader = DataLoader(
         train_ds,
         batch_size=trial_cfg["batch_size"],
         shuffle=True,
         num_workers=trial_cfg["num_workers"],
+        collate_fn=collate_fn,
     )
     val_loader = DataLoader(
         val_ds,
         batch_size=trial_cfg["batch_size"],
         shuffle=False,
         num_workers=trial_cfg["num_workers"],
+        collate_fn=collate_fn,
     )
 
     model = get_model(model_name, trial_cfg).to(device)
     criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=trial_cfg["lr"])
+    optimizer = torch.optim.Adam(
+        model.parameters(),
+        lr=trial_cfg["lr"],
+        weight_decay=trial_cfg.get("weight_decay", 0.0),
+    )
 
     best_val_loss = float("inf")
     patience_counter = 0

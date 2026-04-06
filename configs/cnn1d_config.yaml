@@ -1,19 +1,49 @@
 model: cnn1d
 
-# Strided Conv1d layers progressively reduce the 580864-sample waveform.
-# Each entry corresponds to one conv block [out_channels, kernel_size, stride].
+# Strided Conv1d layers progressively compress the raw waveform.
+# Each entry: [out_channels, kernel_size, stride].
+# With padding=k//2 (odd kernels), output length = ceil(L/stride) per block.
+# First kernel enlarged to 221 (~10ms at 22050 Hz) so the first layer acts as a
+# learned bank of bandpass filters — too-small kernels cannot distinguish low-
+# frequency content from high-frequency harmonics at the input resolution.
+# Ref: Dai et al. (1610.00087), Purwins et al. (1905.00078)
 conv_blocks:
-  - [32,  11, 4]
-  - [64,   9, 4]
-  - [128,  7, 4]
-  - [256,  5, 4]
+  - [32,  221, 4]
+  - [64,    9, 4]
+  - [128,   7, 4]
+  - [256,   5, 4]
 
+gru_hidden: 128
 dropout: 0.3
+# Progressive inter-block dropout: rates applied after each conv block before
+# the next. Length must match len(conv_blocks). Increases with depth so early
+# layers (general features) are regularised lightly, later layers heavily.
+# Ref: Rossi et al. (DAFx25_paper_16)
+inter_dropout_rates: [0.1, 0.2, 0.3, 0.4]
 num_classes: 6
+
+# Set to true to replace the GRU with global average pooling (fully-conv design).
+# Lighter on Colab but no recurrent context. False keeps the GRU.
+# Ref: Dai et al. (1610.00087), Lee et al. SampleCNN (applsci-08-00150)
+use_gap: false
 
 # Training
 batch_size: 32
 lr: 0.001
+# L2 weight decay on Adam — prevents over-reliance on absolute amplitude cues.
+# Ref: Pons et al. (1703.06697)
+weight_decay: 0.0001
+# Cosine annealing LR schedule over the full training run.
+scheduler: cosine
 epochs: 100
 patience: 15
 num_workers: 0
+
+# Mixup alpha > 0 enables Mixup training. Soft targets encourage smoother
+# decision boundaries between spectrally close pedal types.
+# Ref: Purwins et al. (1905.00078)
+mixup_alpha: 0.2
+
+# Pass inverse-frequency class weights to CrossEntropyLoss if classes are uneven.
+# Ref: Levy et al. (s13634-022-00933-9)
+use_class_weights: true

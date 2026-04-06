@@ -22,11 +22,20 @@ augmentation:
   - 0.8
   - 1.2
   max_shift_ratio: 0.1
+  # Pitch shift range in semitones — pedal character is largely pitch-invariant
+  pitch_shift_steps: [-2, -1, 1, 2]
+  # Speed perturbation rates (also shifts pitch slightly — acceptable tradeoff)
+  time_stretch_rates: [0.85, 0.9, 1.1, 1.15]
 mel:
   n_fft: 1024
-  hop_length: 512
+  # hop_length halved from 512 → 256 for finer temporal resolution (~11ms frames
+  # vs ~23ms). Better captures pick-attack transients that distinguish fuzz/dist.
+  # NOTE: re-run mel_precompute.py after changing this — cached .pt files are stale.
+  hop_length: 256
   n_mels: 64
   f_min: 80
   f_max: 8000
   power: 2.0
-  fixed_time_frames: 1135
+  # Approx 2× the previous value (1135) because hop_length was halved.
+  # Verify by running mel_precompute.py and checking the printed median.
+  fixed_time_frames: 2270

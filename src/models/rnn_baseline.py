@@ -2,9 +2,9 @@
 Single-layer RNN baseline for guitar pedal classification from raw audio.
 
 The waveform is downsampled by striding before being fed into the RNN,
-reducing the sequence length to match the mel spectrogram's temporal
-resolution (~fixed_time_frames steps). This makes the baseline computationally
-tractable while operating in the time domain.
+reducing the sequence length to a tractable number of steps. Variable-length
+inputs are handled via packed sequences so padding never influences the final
+hidden state.
 
 Intentionally kept simple — this is a floor to beat, not a competitive model.
 
@@ -14,6 +14,7 @@ with Deep Learning" (2019) informs the rationale for time-domain modelling.
 
 import torch
 import torch.nn as nn
+from torch.nn.utils.rnn import pack_padded_sequence
 
 
 class RNNBaseline(nn.Module):
@@ -21,8 +22,8 @@ class RNNBaseline(nn.Module):
     Single-layer RNN that classifies raw audio waveforms.
 
     The input waveform is downsampled by taking every ``downsample_factor``-th
-    sample, then fed as a sequence into a vanilla RNN. The last hidden state
-    is passed through a linear classifier.
+    sample, then fed as a sequence into a vanilla RNN. The last valid hidden
+    state is passed through a linear classifier.
 
     Args:
         downsample_factor (int): Step size for waveform downsampling.
@@ -37,11 +38,22 @@ class RNNBaseline(nn.Module):
         self.rnn = nn.RNN(input_size=1, hidden_size=hidden_size, batch_first=True)
         self.classifier = nn.Linear(hidden_size, num_classes)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, lengths: torch.Tensor = None) -> torch.Tensor:
         # x: (batch, 1, samples) — downsample along time axis
         x = x[:, :, :: self.downsample_factor]  # (batch, 1, seq_len)
         x = x.permute(0, 2, 1)  # (batch, seq_len, 1) for batch_first RNN
-        _, h_n = self.rnn(x)  # h_n: (1, batch, hidden_size)
+
+        if lengths is not None:
+            ds_lengths = (
+                (lengths + self.downsample_factor - 1) // self.downsample_factor
+            ).clamp(min=1)
+            packed = pack_padded_sequence(
+                x, ds_lengths.cpu(), batch_first=True, enforce_sorted=False
+            )
+            _, h_n = self.rnn(packed)
+        else:
+            _, h_n = self.rnn(x)
+
         h_n = h_n.squeeze(0)  # (batch, hidden_size)
         return self.classifier(h_n)
 
